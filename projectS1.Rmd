@@ -1,0 +1,434 @@
+---
+title: "Obesity Status and  Coronary Heart Disease(CHD) in the Framingham Heart Study"
+subtitle: "Project presentation"
+author: "吳東翰、黃凱揚"
+date: "2020/06/08 (updated: `r Sys.Date()`)"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+library(dplyr)
+library(ggplot2) 
+library(viridis) 
+library(ggthemes)
+library(tidyr)
+library(hrbrthemes)
+library(tidyverse)
+library(lattice)
+library(Ecdat)
+library(gapminder)
+library(magrittr)
+library(gridExtra)
+library(grid)
+dta <-read.csv("C:/tmp/S/run1.csv",header = T)
+names(dta)[c(1,1)] <- c("RANDID")
+dta <- na.omit(dta)
+dtanew <- dta %>% 
+  filter(PERIOD == "1" & PREVCHD == "0") 
+
+dtanew$TIMECHDyear<-dtanew$TIMECHD/365.25
+dtanew$BMIff <- with(dtanew, cut(BMI, ordered=T, breaks=c(0,18.5, 24, 27,100),labels=c("過輕", "正常", "過重","肥胖")))  
+dtaA<- knitr::kable(anova(lm(dtanew$TIMECHDyear ~ dtanew$BMIff, data=dtanew)))
+
+
+dtanew <- dtanew %>% mutate(BMIF=cut(BMI, 
+                                 breaks=quantile(BMI, 
+                                                 breaks=c(0,18.5, 24, 27,100)),
+                                 label=c("過輕", "正常", "過重","肥胖"), 
+                                 ordered=T, 
+                                 include.lowest=T))
+
+dtanew$ANYCHD<- as.numeric(dtanew$ANYCHD)
+dtanew$ANYCHDf<-ifelse(dtanew$ANYCHD>= 0.5, "Sick", "Health") #ANYCHD分為大於等於.5(=Sick),小於(=Health)
+dtanew$SYSBP<- as.numeric(dtanew$SYSBP)
+dtanew$CURSMOKEf<-ifelse(dtanew$CURSMOKE>= 0.5, "No", "Smoke")
+dtanew$EDUC<- as.numeric(dtanew$EDUC)
+dtanew$CIGPDAY<- as.numeric(dtanew$CIGPDAY)
+dtanew$DIABP<- as.numeric(dtanew$DIABP)
+dtanew$CIGPDAYf <- with(dtanew, cut(CIGPDAY, ordered=T, breaks=c(0, 10, 30, 60),labels=c("無", "成癮","老煙槍"))) 
+dtanew$SEXf<-ifelse(dtanew$SEX>= 1.5, "F", "M") #SEX分為大於等於1.5(=F),小於(=M)
+
+
+
+
+```
+background-image: url(https://pic4.zhimg.com/v2-30eeb11814f09106e43a2bbd6f1aba6b_1200x500.jpg)
+background-size: 500px
+background-position: 80% 70%
+class:
+#Outline
+<br/>
+##Introduction
+##Method
+##Results
+##Discussion
+##Conclusion
+
+---
+class:
+#Introduction
+<br/>
+####本篇探討冠心病重要影響成因
+<br/>
+####已知終身無法改變：年歲增高、性別。
+####尚可改變的危險因子：高血壓、糖尿病、高脂血症、肥胖症、抽菸。
+<br/>
+####期望透過分析找出哪些因素與冠心病具有關聯
+
+
+---
+class:
+#Method
+###統計分析：
+####CHD & BMI：Anova
+####preCHD & EDU & Glucose & Heartbeat et.,al： Correlation
+####SYSBP & ANYCHD：T-test
+###視覺化圖：
+####lollipop、Correlation plot、Extension coefficients plot、effects plot、Grouping、Boxplot、Error bars、Grouping  conditioning、trends region
+---
+##BMI & AGE Grouping color relationship
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F, out.height=500, out.width= 1000}
+
+ggplot(dtanew, aes(BMI, AGE, 
+                color=BMIff)) +
+  geom_point()+
+  stat_smooth(aes(group=1),
+              method='loess',
+              formula= y ~ x, 
+              col='orange', se=F)+
+  stat_smooth(method='lm',
+              formula=y ~ x, se=F) +
+  scale_color_manual(values=c('red',
+                              'darkgreen',
+                              'steelblue',
+                              'dark'),
+                     guide=guide_legend(title=NULL))+
+  labs(x='AGE', y='BMI', 
+       title='Relationship between BMI and AGE')+
+  theme_ipsum() +
+  theme(legend.position='none')+
+  theme(text=element_text(size=25))
+
+
+```
+---
+#Anova BMI & TIMECHD
+```{r comment='#', message=FALSE, warning=FALSE, cache=F, echo=T}
+dtanew$TIMECHDyear<-dtanew$TIMECHD/365.25
+dtanew$BMIff <- with(dtanew, cut(BMI, ordered=T, breaks=c(0,18.5, 24, 27,100),labels=c("過輕", "正常", "過重","肥胖")))  
+dtaA<- knitr::kable(anova(lm(dtanew$TIMECHDyear ~ dtanew$BMIff, data=dtanew)))
+```
+
+```{r table-first, fig.show = 'hide'}
+table(dtaA)
+```
+
+
+---
+class:
+##DIABP by CIGPDAYf & BMIff - Dotplot lollipop plot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F,out.height=500, out.width= 3000}
+p <- aggregate(DIABP ~ CIGPDAYf + BMIff , 
+               data=dtanew,
+               FUN=mean) %>%
+  rename(m_DIABP=DIABP) %>%
+  unite(catg, CIGPDAYf, BMIff) %>%
+  ggplot( ) + 
+  aes(x=m_DIABP, 
+      y=reorder(catg, m_DIABP)) +
+  geom_point(size=rel(3)) +
+  geom_segment(aes(xend=mean(dtanew$DIABP),
+                   yend=reorder(catg, m_DIABP)))+
+  labs(x="Mean DIABP", 
+       y="CIGPDAY, BMI ") +
+  theme_minimal()+
+  theme(text=element_text(size=25))
+p
+```
+
+---
+class:center
+#Correlation plot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F}
+
+dtar <-dtanew[ ,c(5,6,8,9,12,13,14,15,28)]
+dtar %>% select_if(is.numeric) %>% na.omit() %>% cor() %>%
+  ggcorrplot::ggcorrplot(., type = 'lower', lab=T, hc.order = F, hc.method = 'centroid',colors = c('steelblue3', 'white', 'deeppink3'), sig.level=.2, insig = 'pch', pch.col = 'grey40') +
+theme(text=element_text(size=25))
+
+```
+
+
+---
+class:center
+##DIABP-  Extension coefficients plot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F}
+library(broom)
+dtanew$SEXf<-ifelse(dtanew$SEX>= 1.5, "女", "男") #SEX分為大於等於1.5(=F),小於(=M)
+dtanew$EDUCf <- with(dtanew, cut(EDUC, ordered=T, breaks=c(0 ,1, 2, 3, 4),labels=c("低", "中", "中高","高")))  
+dtanew$BMIff <- with(dtanew, cut(BMI, ordered=T, breaks=c(0,18.5, 24, 27,100),labels=c("過輕", "正常", "過重","肥胖"))) 
+dtanew$CURSMOKEf<-ifelse(dtanew$CURSMOKE>= 0.5, "無", "有抽菸")
+dtanew$ANYCHDf<-ifelse(dtanew$ANYCHD>= 0.5, "心臟病", "Health")#ANYCHD分為大於等於.5(=Sick),小於(=Health)
+
+library(GGally)
+m1 <- lm(dtanew$DIABP~factor(dtanew$BMIff)+factor(dtanew$SEXf)+dtanew$AGE+factor(dtanew$EDUCf))
+ggcoef(m1,exclude_intercept=FALSE, sort=NULL) +theme_minimal()+theme(text=element_text(size=25))
+```
+
+
+---
+class:center
+##SYSBP- Extension coefficients plot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F}
+library(broom)
+dtanew$SEXf<-ifelse(dtanew$SEX>= 1.5, "女", "男") #SEX分為大於等於1.5(=F),小於(=M)
+dtanew$EDUCf <- with(dtanew, cut(EDUC, ordered=T, breaks=c(0 ,1, 2, 3, 4),labels=c("低", "中", "中高","高")))  
+dtanew$BMIff <- with(dtanew, cut(BMI, ordered=T, breaks=c(0,18.5, 24, 27,100),labels=c("過輕", "正常", "過重","肥胖"))) 
+dtanew$CURSMOKEf<-ifelse(dtanew$CURSMOKE>= 0.5, "無", "有抽菸")
+dtanew$ANYCHDf<-ifelse(dtanew$ANYCHD>= 0.5, "心臟病", "Health")#ANYCHD分為大於等於.5(=Sick),小於(=Health)
+
+library(GGally)
+m2 <- lm(dtanew$SYSBP~factor(dtanew$BMIff)+factor(dtanew$SEXf)+dtanew$AGE+factor(dtanew$EDUCf))
+ggcoef(m2,exclude_intercept=FALSE, sort=NULL) +theme_minimal()+theme(text=element_text(size=25))
+```
+---
+class:center
+##DIABP- Extension - effects plot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F}
+library(ggeffects)
+
+m3 <- lm(DIABP ~ CIGPDAYf + BMIff  +  CIGPDAYf:BMIff, data=dtanew)
+
+dta_m3 <- ggpredict(m3,terms = ~ CIGPDAYf + BMIff)
+plot(dta_m3) + 
+  labs(y="DIABP", 
+       x="SMOKE")+
+  theme(text=element_text(size=25))
+```
+
+
+---
+class: left
+##SYSBP~ANYCHD T-test
+```{r}
+
+t.test(dtanew$SYSBP~dtanew$ANYCHDf, var.equal=TRUE)
+```
+
+---
+class:center
+###BMI & ANYCHD Grouping color relationship
+
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F, out.height=500, out.width= 1000}
+
+ggplot(dtanew, aes(BMI, ANYCHD, 
+                color=BMIF)) +
+  geom_point()+
+  stat_smooth(aes(group=1),
+              method='loess',
+              formula= y ~ x, 
+              col='orange', se=F)+
+  stat_smooth(method='lm',
+              formula=y ~ x, se=F) +
+  scale_color_manual(values=c('gray',
+                              'magenta',
+                              'green3',
+                              'red'),
+                     guide=guide_legend(title=NULL))+
+  labs(x='BMI', y='ANYCHD', 
+       title='Relationship between BMI and ANYCHD')+
+  theme_ipsum() +
+  theme(legend.position='bottom')+
+  theme(text=element_text(size=25))
+```
+
+---
+class:center
+###GLUCOSE & ANYCHD Grouping color relationship
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F, out.height=500, out.width= 1000}
+
+ggplot(dtanew,aes(GLUCOSE,ANYCHD , 
+                color=ANYCHDf))+
+  geom_point()+
+  stat_smooth(aes(group=1),
+              method='loess',
+              formula= y ~ x, 
+              col='green3', se=F)+
+  stat_smooth(method='lm',
+              formula=y ~ x, se=F) +
+  scale_color_manual(values=c('cyan',
+                              'red'),
+                     guide=guide_legend(title=NULL))+
+  labs(x='GLUCOSE', y='ANYCHD', 
+       title='Relationship between GLUCOSE and ANYCHD')+
+  theme_ipsum() +
+  theme(legend.position='bottom')+
+  theme(text=element_text(size=25))
+
+```
+
+---
+class:center
+##BMI & SBP：Boxplot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F,out.height=500, out.width=800}
+qplot( BMIff,SYSBP, colour = factor(BMIff), data = dtanew, geom = 'boxplot') + 
+    labs(colour = 'BIM分組') +xlab("BMI分組") +ylab("SBP")+
+  theme(text=element_text(size=25)) 
+    
+```
+---
+class:center
+###BMI ,ANYCHD → SYSBP Error bars for the means
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F}
+pd <- position_dodge(.3)
+p3 <- dtanew  %>% group_by(BMIff, ANYCHDf) %>%
+  summarize(SYSBP_m=mean(SYSBP), 
+            SYSBP_se=sd(SYSBP)/sqrt(n())) %>%
+  ggplot() + 
+  aes(ANYCHDf, SYSBP_m, 
+      group=BMIff, 
+      shape=BMIff) +
+  geom_errorbar(aes(ymin=SYSBP_m - SYSBP_se,
+                    ymax=SYSBP_m + SYSBP_se),
+                width=.2, size=.3, 
+                position=pd) +
+  #不要線geom_line(position=pd, 
+  #linetype='dotted') +
+  geom_point(position=pd, 
+             size=rel(3)) +
+  scale_shape(guide=guide_legend(title=NULL)) +
+  labs(x="BMIF", y="SYSBP") +
+  theme_ipsum() +
+  theme(text = element_text(family = '蘋方-繁 標準體'), legend.position = "none")+
+  theme(text=element_text(size=25))
+
+p4 <- p3 +
+  aes(BMIff, 
+      SYSBP_m, 
+      group=ANYCHDf, 
+      color=ANYCHDf, 
+      shape=NULL) +
+  scale_color_manual(values=c('red', 
+                              'green3',
+                              'cyan',
+                              'yellow')) +
+  scale_shape(guide=guide_legend(title=NULL, 
+                                 reverse=T))+
+  theme(text = element_text(size = 16),
+  legend.position = c(0.9,0.1)) +
+  labs(x="BMI levels", 
+       y="Mean SYSBP") 
+p4
+```
+
+---
+class:
+##BMI & CIGPDAY → SYSBP Grouping versus conditioning
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F, out.height=500, out.width= 1000}
+dtanew$CIGPDAYf<- as.character(dtanew$CIGPDAYf)
+p1 <- ggplot(dtanew, 
+             aes(BMI, SYSBP, 
+                 color=CIGPDAYf)) +##只能是名稱，不接受數字
+  stat_smooth(method="lm", 
+              formula=y ~ x, se=F) +
+  geom_point() +
+  coord_fixed() +
+  scale_color_manual(values=c('lightgreen',
+                              'green',
+                              'darkgreen'),
+                     guide=guide_legend(title=NULL)) +
+  labs(x="BMI", y="SYSBP") +
+  theme_bw() +
+  theme(legend.position='top')+
+  theme(text=element_text(size=25))
+p2 <- ggplot(dtanew, 
+             aes(BMI, SYSBP)) +
+  stat_smooth(method="lm", 
+              formula=y ~ x) +
+  geom_point(shape=20) +
+  facet_grid(CIGPDAYf ~ .) +
+  labs(x="BMI", y="SYSBP") +
+  theme_bw()+
+  theme(text=element_text(size=25))
+
+grid.arrange(p1, p2, ncol=2)
+```
+---
+class:center, middle
+##BMI & EDU by CURSMOKE Similar trends by Region
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F, out.height=500, out.width= 1000}
+
+dtanew$EDUCf <- with(dtanew, cut(EDUC, ordered=T, breaks=c(0 ,1, 2, 3, 4),labels=c("低", "中", "中高","高")))  
+
+xyplot(GLUCOSE~EDUCf|ANYCHDf,data=dtanew,
+       type=c("p","g","r"),layout=c(3,1),
+       xlab="EDU",
+       ylab="GLUCOSE")
+
+```
+
+---
+class:center
+##EDU & GLUCOSE by ANYCHD = 1：Boxplot
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F,out.height=500, out.width=800}
+dtanew <- na.omit(dtanew)
+dtaCHD <- dtanew %>% 
+  filter(PERIOD == "1" & PREVCHD == "0" & ANYCHD == "1") 
+qplot( EDUCf,GLUCOSE, colour = factor(EDUCf), data = dtaCHD, geom = 'boxplot') + 
+    labs(colour = 'EDUC分組') +xlab("EDUC分組") +ylab("GLUCOSE")+
+  theme(text=element_text(size=15)) 
+    
+```
+---
+
+class:center, middle
+##CIGPDAY & DIABP by BMI Similar trends by Region
+```{r, message=F, warning=FALSE, eval=T, cache=F, echo=F}
+
+p1 <- ggplot(dtanew, 
+             aes(CIGPDAY,DIABP , 
+                 color=BMIff)) +##只能是名稱，不接受數字
+  stat_smooth(method="lm", 
+              formula=y ~ x, se=F) +
+  geom_point() +
+  coord_fixed() +
+  scale_color_manual(values=c('lightgreen',
+                              'green',
+                              'darkgreen',
+                              'navyblue'),
+                     guide=guide_legend(title=NULL)) +
+  labs(x="CIGPDAY", y="DIABP") +
+  theme_bw() +
+  theme(legend.position='top')+
+  theme(text=element_text(size=12))
+p2 <- ggplot(dtanew, 
+             aes(CIGPDAY,DIABP)) +
+  stat_smooth(method="lm", 
+              formula=y ~ x) +
+  geom_point(shape=20) +
+  facet_grid(BMIff ~ .) +
+  labs(x="CIGPDAY", y="DIABP") +
+  theme_bw()+
+  theme(text=element_text(size=12))
+
+grid.arrange(p1, p2, ncol=2)
+```
+---
+
+---
+class:center, middle
+
+---
+#Conclusion
+####冠心病與血壓、抽菸次數、BMI、血糖、教育程度具有高相關
+####
+####
+---
